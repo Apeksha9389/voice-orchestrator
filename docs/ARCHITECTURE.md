@@ -5,7 +5,7 @@
 ```
 caller (WebRTC / SIP) ──► LiveKit room ──► Agent worker
                                              │
-   audio in ─► [noise suppression] ─► Silero VAD ─┬─► STT (faster-whisper / IndicConformer)
+   audio in ─► RNNoise (48 kHz) ─────► Silero VAD ─┬─► STT (faster-whisper / IndicConformer)
                                                   │          │
                                                   │     turn detector (EOU)
                                                   │          ▼
@@ -23,6 +23,10 @@ caller (WebRTC / SIP) ──► LiveKit room ──► Agent worker
   model, strong but transport-agnostic so more glue for SIP), Vocode (less maintained), and
   speech-to-speech models (lower latency but no control over STT/TTS, poor Hindi, no tool
   determinism). A cascade keeps every stage swappable and observable.
+- **Noise suppression.** RNNoise wraps the session audio input (`DenoisedAudioInput`) before VAD,
+  STT and barge-in detection. It adds 30 ms of latency at ~6% of one core, and the room input is
+  requested at 48 kHz so the hot path never resamples. Benchmarks and the reasoning on
+  DeepFilterNet3 are in [NOISE.md](NOISE.md).
 - **VAD.** Silero VAD (ONNX, CPU, <1 ms/frame) gates STT and drives interruption detection.
 - **STT.** faster-whisper `large-v3-turbo` int8 (CTranslate2). Non-streaming, so it is wrapped in
   `StreamAdapter`, which segments utterances with the VAD and transcribes each on speech end.

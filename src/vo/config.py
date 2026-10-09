@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     tts_voice: str = "af_heart"
     tts_speed: float = 1.0
 
+    denoiser: str = "rnnoise"  # rnnoise | none
+
     vad_activation: float = 0.5
     vad_min_silence: float = 0.4
 

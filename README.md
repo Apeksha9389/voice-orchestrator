@@ -1,7 +1,7 @@
 # voice-orchestrator
 
 Real-time voice agent built on LiveKit Agents: Silero VAD → faster-whisper STT → LLM (OpenRouter /
-OpenAI) → Kokoro TTS, with a focus on noise robustness and interruption handling.
+OpenAI) → Kokoro TTS, with RNNoise suppression in front of VAD/STT, focused on noise robustness and interruption handling.
 
 ## Quickstart
 
@@ -22,7 +22,14 @@ python -m vo.agent dev
 
 Join with the [Agents Playground](https://agents-playground.livekit.io) using `ws://localhost:7880`.
 
+## Benchmarks
+
+```bash
+python scripts/bench_noise.py   # denoiser effect on SNR and VAD under synthetic noise
+```
+
 ## Docs
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Noise suppression](docs/NOISE.md)
 - [Roadmap](docs/ROADMAP.md)

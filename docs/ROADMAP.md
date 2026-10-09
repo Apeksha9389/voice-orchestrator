@@ -6,9 +6,13 @@ Scheduled build runs pick the first unchecked milestone.
 - [x] **Day 1 — Oct 8 · Core cascade pipeline.** LiveKit Agents worker; Silero VAD; faster-whisper
   STT (VAD-segmented via `StreamAdapter`); OpenRouter/OpenAI LLM; Kokoro-82M ONNX TTS with streamed
   PCM; per-turn metrics; local LiveKit server via docker compose.
-- [ ] **Day 2 — Oct 9 · Noise suppression front-end.** `DenoisedAudioInput` chained in front of
-  VAD/STT using DeepFilterNet3 (48 kHz, ~10 ms hop) with RNNoise fallback; per-frame SNR estimate;
-  config switch; unit test on synthetic speech + babble/white noise showing VAD false-trigger drop.
+- [x] **Day 2 — Oct 9 · Noise suppression front-end.** `DenoisedAudioInput` wraps the session
+  input with streaming RNNoise (48 kHz, 10 ms blocks, 30 ms total latency) through a
+  rate/frame-size adapter, and tracks per-frame SNR and speech probability. Selected with
+  `VO_DENOISER` and degrades to pass-through if the library is missing. `scripts/bench_noise.py`
+  measures noise reduction, speech SNR, and VAD FPR/recall under white, pink and impulsive noise
+  ([NOISE.md](NOISE.md)). DeepFilterNet3 was moved to the Day 7 offline reference because its pip
+  package cannot stream.
 - [ ] **Day 3 — Oct 10 · Interruption & turn-taking.** LiveKit multilingual EOU turn detector;
   false-interruption recovery (resume after `false_interruption_timeout`); backchannel filter
   ("haan", "okay", "hmm") that does not cut agent speech; min-words gate; interruption event log
@@ -23,5 +27,5 @@ Scheduled build runs pick the first unchecked milestone.
   streaming; LLM fallback chain (OpenRouter → OpenAI); OpenTelemetry traces per turn
   (VAD→EOU→STT→LLM TTFT→TTS TTFB); retry/backoff on providers.
 - [ ] **Day 7 — Oct 14 · Evaluation harness & docs.** Offline eval: scripted conversations mixed
-  with MUSAN-style noise at 0/5/10 dB SNR; metrics WER, turn latency p50/p95, interruption
+  with MUSAN-style noise at 0/5/10 dB SNR (RNNoise vs. offline DeepFilterNet3 reference); metrics WER, turn latency p50/p95, interruption
   precision/recall; CI (ruff + pytest); final architecture and benchmark docs.

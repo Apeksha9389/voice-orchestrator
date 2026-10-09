@@ -6,6 +6,7 @@ dependencies = [
   "livekit-agents[openai,silero,turn-detector]==1.8.5",
   "faster-whisper==1.2.1",
   "kokoro-onnx>=0.6,<0.7",
+  "pyrnnoise>=0.4,<0.5",
   "pydantic-settings>=2.6",
   "numpy>=1.26",
 ]

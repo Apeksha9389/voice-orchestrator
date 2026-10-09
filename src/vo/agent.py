@@ -10,8 +10,10 @@ from livekit.agents import (
     metrics,
     stt,
 )
+from livekit.agents.voice import room_io
 from livekit.plugins import openai, silero
 
+from vo.audio.denoise import DenoisedAudioInput, build_denoiser
 from vo.config import settings
 from vo.plugins.kokoro_tts import KokoroTTS
 from vo.plugins.whisper_stt import WhisperSTT
@@ -54,7 +56,17 @@ async def entrypoint(ctx: JobContext) -> None:
         usage.collect(ev.metrics)
 
     ctx.add_shutdown_callback(lambda: log.info("usage: %s", usage.get_summary()))
-    await session.start(agent=Agent(instructions=s.system_prompt), room=ctx.room)
+    await session.start(
+        agent=Agent(instructions=s.system_prompt),
+        room=ctx.room,
+        # 48 kHz matches RNNoise's native rate, so no resampling before denoising
+        room_options=room_io.RoomOptions(
+            audio_input=room_io.AudioInputOptions(sample_rate=48000)
+        ),
+    )
+    denoiser = build_denoiser(s.denoiser)
+    if denoiser and session.input.audio:
+        session.input.audio = DenoisedAudioInput(session.input.audio, denoiser)
     await session.generate_reply(instructions="Greet the user briefly.")
 
 
