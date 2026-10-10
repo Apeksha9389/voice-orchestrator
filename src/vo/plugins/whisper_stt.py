@@ -9,6 +9,12 @@ from livekit.agents.utils import AudioBuffer
 TARGET_SR = 16000
 
 
+def keep_segment(no_speech_prob: float, avg_logprob: float) -> bool:
+    """Whisper's own silence heuristic: drop segments it believes are non-speech and decoded with
+    low confidence. This removes the classic noise hallucinations ("Thank you.", "you")."""
+    return not (no_speech_prob > 0.6 and avg_logprob < -1.0)
+
+
 def to_mono_16k(buffer: AudioBuffer) -> np.ndarray:
     frame = utils.combine_frames(buffer)
     pcm = np.frombuffer(frame.data, dtype=np.int16).astype(np.float32) / 32768.0
@@ -39,7 +45,9 @@ class WhisperSTT(stt.STT):
             pcm, language=language, beam_size=self._beam_size,
             vad_filter=False, condition_on_previous_text=False,
         )
-        text = " ".join(s.text.strip() for s in segments).strip()
+        text = " ".join(
+            s.text.strip() for s in segments if keep_segment(s.no_speech_prob, s.avg_logprob)
+        ).strip()
         return text, info.language, info.language_probability
 
     async def _recognize_impl(self, buffer: AudioBuffer, *, language: NotGivenOr[str] = NOT_GIVEN,

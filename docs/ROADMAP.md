@@ -13,10 +13,13 @@ Scheduled build runs pick the first unchecked milestone.
   measures noise reduction, speech SNR, and VAD FPR/recall under white, pink and impulsive noise
   ([NOISE.md](NOISE.md)). DeepFilterNet3 was moved to the Day 7 offline reference because its pip
   package cannot stream.
-- [ ] **Day 3 — Oct 10 · Interruption & turn-taking.** LiveKit multilingual EOU turn detector;
-  false-interruption recovery (resume after `false_interruption_timeout`); backchannel filter
-  ("haan", "okay", "hmm") that does not cut agent speech; min-words gate; interruption event log
-  with agent-speech truncation point written into chat context.
+- [x] **Day 3 — Oct 10 · Interruption & turn-taking.** The agent pauses on overlapping speech
+  and resumes on a false interruption. `VoiceAgent.stt_node` filters backchannels (English,
+  Hinglish, Devanagari lexicon; overlap-aware, with stop-word override). Whisper hallucinations
+  are filtered. An interrupted reply gets a context-repair note naming what the user heard. The
+  multilingual end-of-utterance model runs with a VAD fallback, and a structured `turn_event` log
+  records each event ([TURN_TAKING.md](TURN_TAKING.md)). LiveKit's `min_words` was dropped: batch
+  STT has no interim words, so it would delay every barge-in.
 - [ ] **Day 4 — Oct 11 · Hindi + code-mixed speech.** AI4Bharat IndicConformer (hi) STT plugin;
   language-ID router (whisper LID on first 1.5 s) selecting en/hi model; Kokoro `hf_alpha` Hindi
   voice; Hinglish prompt; tests on per-language routing.

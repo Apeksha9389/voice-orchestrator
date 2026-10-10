@@ -1,7 +1,6 @@
 import logging
 
 from livekit.agents import (
-    Agent,
     AgentSession,
     JobContext,
     JobProcess,
@@ -17,6 +16,8 @@ from vo.audio.denoise import DenoisedAudioInput, build_denoiser
 from vo.config import settings
 from vo.plugins.kokoro_tts import KokoroTTS
 from vo.plugins.whisper_stt import WhisperSTT
+from vo.turns.agent import VoiceAgent
+from vo.turns.tracking import InterruptionLog, OverlapTracker
 
 log = logging.getLogger("vo")
 
@@ -26,6 +27,34 @@ def build_llm(s):
         return openai.LLM.with_openrouter(model=s.llm_model, api_key=s.openrouter_api_key,
                                           app_name="voice-orchestrator")
     return openai.LLM(model=s.llm_model, api_key=s.openai_api_key)
+
+
+def build_turn_detector(s):
+    if s.turn_detector == "vad":
+        return "vad"
+    try:
+        from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
+        return MultilingualModel()
+    except (ImportError, OSError, ValueError) as e:  # files missing: run `download-files`
+        log.warning("turn detector unavailable (%s); using VAD endpointing", e)
+        return "vad"
+
+
+def turn_handling(s, turn_detection) -> dict:
+    return {
+        "turn_detection": turn_detection,
+        "endpointing": {"min_delay": s.endpointing_min_delay, "max_delay": s.endpointing_max_delay},
+        "interruption": {
+            "mode": "vad",  # "adaptive" needs LiveKit Cloud inference
+            "min_duration": s.interrupt_min_duration,
+            # batch STT has no interim words, so a word gate would delay every barge-in until the
+            # user stops; backchannels are filtered on the final transcript instead
+            "min_words": 0,
+            "resume_false_interruption": True,
+            "false_interruption_timeout": s.false_interruption_timeout,
+        },
+    }
 
 
 def prewarm(proc: JobProcess) -> None:
@@ -46,18 +75,26 @@ async def entrypoint(ctx: JobContext) -> None:
         stt=stt.StreamAdapter(stt=ud["stt"], vad=vad),
         llm=build_llm(s),
         tts=ud["tts"],
-        turn_handling={"interruption": {"mode": "vad", "min_duration": 0.4}},
+        turn_handling=turn_handling(s, build_turn_detector(s)),
     )
     usage = metrics.UsageCollector()
+    tracker, events = OverlapTracker(), InterruptionLog()
+    session.on("agent_state_changed", lambda ev: tracker.on_agent_state(ev.new_state))
+    session.on("agent_false_interruption",
+               lambda ev: events.record("false_interruption", resumed=ev.resumed))
 
     @session.on("metrics_collected")
     def _on_metrics(ev):
         metrics.log_metrics(ev.metrics)
         usage.collect(ev.metrics)
 
-    ctx.add_shutdown_callback(lambda: log.info("usage: %s", usage.get_summary()))
+    async def _report() -> None:
+        log.info("usage: %s turn_events: %s", usage.get_summary(), events.counts())
+
+    ctx.add_shutdown_callback(_report)
     await session.start(
-        agent=Agent(instructions=s.system_prompt),
+        agent=VoiceAgent(instructions=s.system_prompt, tracker=tracker, events=events,
+                         backchannel_max_words=s.backchannel_max_words),
         room=ctx.room,
         # 48 kHz matches RNNoise's native rate, so no resampling before denoising
         room_options=room_io.RoomOptions(

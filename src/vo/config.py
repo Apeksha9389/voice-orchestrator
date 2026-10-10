@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     vad_activation: float = 0.5
     vad_min_silence: float = 0.4
 
+    turn_detector: str = "multilingual"  # multilingual | vad
+    endpointing_min_delay: float = 0.4
+    endpointing_max_delay: float = 2.5
+    interrupt_min_duration: float = 0.4  # user speech (s) before agent audio is paused
+    false_interruption_timeout: float = 1.0  # silence (s) after a pause before resuming
+    backchannel_max_words: int = 3
+
     system_prompt: str = (
         "You are a concise, friendly voice assistant. Reply in one or two short spoken "
         "sentences. No markdown, lists, or emojis."

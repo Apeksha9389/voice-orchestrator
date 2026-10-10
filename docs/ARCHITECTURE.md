@@ -7,10 +7,12 @@ caller (WebRTC / SIP) ──► LiveKit room ──► Agent worker
                                              │
    audio in ─► RNNoise (48 kHz) ─────► Silero VAD ─┬─► STT (faster-whisper / IndicConformer)
                                                   │          │
-                                                  │     turn detector (EOU)
+                                                  │   backchannel filter (stt_node)
+                                                  │          │
+                                                  │   turn detector (multilingual EOU)
                                                   │          ▼
-                                       interruption ◄── LLM (OpenRouter / OpenAI, streamed)
-                                          control            │
+                                pause / resume / cancel ◄── LLM (OpenRouter / OpenAI, streamed)
+                                                             │
                                                   │          ▼
    audio out ◄──────────────────────────── Kokoro TTS (sentence-chunked PCM)
 ```
@@ -37,9 +39,22 @@ caller (WebRTC / SIP) ──► LiveKit room ──► Agent worker
 
 ## Turn-taking and interruptions
 
-The session runs with VAD-based interruption (`min_duration` 0.4 s): user speech while the agent is
-speaking cancels playback and the pending generation. Day 3 layers on semantic end-of-utterance
-detection, false-interruption resume, and backchannel suppression.
+Barge-in works as pause first, decide on the transcript:
+
+1. **Pause.** Overlapping user speech of 0.4 s or more (VAD) *pauses* agent audio without
+   cancelling the generation.
+2. **Backchannel.** `VoiceAgent.stt_node` drops a backchannel ("haan", "okay", "mm-hmm", in
+   English, Hinglish or Devanagari) that started while the agent was speaking. No turn is created,
+   and the false-interruption timer resumes the agent.
+3. **Real interruption.** Anything else cancels the paused speech. The chat context keeps only the
+   played text, marked `interrupted`, and a one-turn system note tells the LLM what the user heard.
+4. **End of turn.** The multilingual end-of-utterance model decides when the user's turn ends,
+   falling back to VAD endpointing if its files are missing.
+5. **Hallucination filter.** Whisper segments with high `no_speech_prob` and low `avg_logprob` are
+   discarded.
+
+Every backchannel, interruption and resume is written to a structured `turn_event` log. Details and
+tuning are in [TURN_TAKING.md](TURN_TAKING.md).
 
 ## Configuration
 

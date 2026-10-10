@@ -32,4 +32,5 @@ python scripts/bench_noise.py   # denoiser effect on SNR and VAD under synthetic
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Noise suppression](docs/NOISE.md)
+- [Turn-taking & interruptions](docs/TURN_TAKING.md)
 - [Roadmap](docs/ROADMAP.md)
