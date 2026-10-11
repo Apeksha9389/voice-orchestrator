@@ -20,9 +20,12 @@ Scheduled build runs pick the first unchecked milestone.
   multilingual end-of-utterance model runs with a VAD fallback, and a structured `turn_event` log
   records each event ([TURN_TAKING.md](TURN_TAKING.md)). LiveKit's `min_words` was dropped: batch
   STT has no interim words, so it would delay every barge-in.
-- [ ] **Day 4 — Oct 11 · Hindi + code-mixed speech.** AI4Bharat IndicConformer (hi) STT plugin;
-  language-ID router (whisper LID on first 1.5 s) selecting en/hi model; Kokoro `hf_alpha` Hindi
-  voice; Hinglish prompt; tests on per-language routing.
+- [x] **Day 4 — Oct 11 · Hindi + code-mixed speech.** `RoutedSTT` identifies each utterance's
+  language with Whisper's encoder and routes it through a sticky `LanguageRouter` (p ≥ 0.7 and
+  ≥ 1 s to switch, `ur`→`hi`). The `IndicConformerSTT` plugin (600M, CTC/RNNT, optional `[indic]`
+  extra) handles Hindi, falling back to Whisper `hi`. Kokoro TTS is script-aware, and
+  `split_on_danda` sentence-chunks Hindi replies. The Hinglish reply prompt is in
+  ([MULTILINGUAL.md](MULTILINGUAL.md)).
 - [ ] **Day 5 — Oct 12 · Telephony ingest & tools.** LiveKit SIP inbound trunk + dispatch rule
   config; 8 kHz path (VAD at 8k, upsample for STT); function tools (end call, transfer, lookup);
   graceful call teardown.

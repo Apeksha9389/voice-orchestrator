@@ -5,7 +5,7 @@
 ```
 caller (WebRTC / SIP) ──► LiveKit room ──► Agent worker
                                              │
-   audio in ─► RNNoise (48 kHz) ─────► Silero VAD ─┬─► STT (faster-whisper / IndicConformer)
+   audio in ─► RNNoise (48 kHz) ─────► Silero VAD ─┬─► language ID ─► STT (Whisper en | IndicConformer hi)
                                                   │          │
                                                   │   backchannel filter (stt_node)
                                                   │          │
@@ -14,7 +14,7 @@ caller (WebRTC / SIP) ──► LiveKit room ──► Agent worker
                                 pause / resume / cancel ◄── LLM (OpenRouter / OpenAI, streamed)
                                                              │
                                                   │          ▼
-   audio out ◄──────────────────────────── Kokoro TTS (sentence-chunked PCM)
+   audio out ◄──────────────────────────── Kokoro TTS (script-aware en/hi, sentence-chunked)
 ```
 
 ## Why a cascade on LiveKit Agents
@@ -32,10 +32,14 @@ caller (WebRTC / SIP) ──► LiveKit room ──► Agent worker
 - **VAD.** Silero VAD (ONNX, CPU, <1 ms/frame) gates STT and drives interruption detection.
 - **STT.** faster-whisper `large-v3-turbo` int8 (CTranslate2). Non-streaming, so it is wrapped in
   `StreamAdapter`, which segments utterances with the VAD and transcribes each on speech end.
-  IndicConformer is added for Hindi on Day 4.
+  Each utterance is language-identified with Whisper's encoder and routed by a sticky
+  `LanguageRouter`: English goes to Whisper, Hindi and Hinglish to AI4Bharat IndicConformer 600M,
+  falling back to Whisper `hi` if IndicConformer is unavailable. See [MULTILINGUAL.md](MULTILINGUAL.md).
 - **LLM.** OpenAI-compatible client; OpenRouter by default for model choice and fallbacks.
 - **TTS.** Kokoro-82M via ONNX Runtime: Apache-2.0, real-time on CPU, 24 kHz. Audio is streamed per
   sentence chunk so time-to-first-audio is bounded by the first sentence, not the full reply.
+  Code-mixed replies are split into Latin and Devanagari runs, and each run is phonemized with its
+  own espeak language. A reply containing Devanagari uses the Hindi voice throughout.
 
 ## Turn-taking and interruptions
 

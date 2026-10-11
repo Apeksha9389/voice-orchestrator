@@ -1,13 +1,13 @@
 # voice-orchestrator
 
 Real-time voice agent built on LiveKit Agents: Silero VAD → faster-whisper STT → LLM (OpenRouter /
-OpenAI) → Kokoro TTS, with RNNoise suppression in front of VAD/STT, focused on noise robustness and interruption handling.
+OpenAI) → Kokoro TTS, with RNNoise suppression in front of VAD/STT, focused on noise robustness, interruption handling, and English/Hindi/Hinglish callers.
 
 ## Quickstart
 
 ```bash
 uv venv -p 3.12 && source .venv/bin/activate
-uv pip install -e ".[dev]"
+uv pip install -e ".[dev]"      # add ,indic for IndicConformer Hindi STT
 cp .env.example .env            # add VO_OPENROUTER_API_KEY
 ./scripts/download_models.sh
 python -m vo.agent console      # talk through your mic, no server needed
@@ -33,4 +33,5 @@ python scripts/bench_noise.py   # denoiser effect on SNR and VAD under synthetic
 - [Architecture](docs/ARCHITECTURE.md)
 - [Noise suppression](docs/NOISE.md)
 - [Turn-taking & interruptions](docs/TURN_TAKING.md)
+- [Hindi / Hinglish](docs/MULTILINGUAL.md)
 - [Roadmap](docs/ROADMAP.md)

@@ -14,7 +14,8 @@ from livekit.plugins import openai, silero
 
 from vo.audio.denoise import DenoisedAudioInput, build_denoiser
 from vo.config import settings
-from vo.plugins.kokoro_tts import KokoroTTS
+from vo.lang.router import LanguageRouter, RoutedSTT
+from vo.plugins.kokoro_tts import KokoroTTS, split_on_danda
 from vo.plugins.whisper_stt import WhisperSTT
 from vo.turns.agent import VoiceAgent
 from vo.turns.tracking import InterruptionLog, OverlapTracker
@@ -57,14 +58,42 @@ def turn_handling(s, turn_detection) -> dict:
     }
 
 
+def load_indic(s):
+    if "hi" not in s.languages or s.hindi_stt != "indic":
+        return None
+    try:
+        from vo.plugins.indic_stt import IndicConformerSTT
+
+        return IndicConformerSTT(model_id=s.indic_model, decoding=s.indic_decoding,
+                                 device="cuda" if s.stt_device == "cuda" else "cpu")
+    except (ImportError, OSError, ValueError, RuntimeError) as e:  # extra missing / gated model
+        log.warning("IndicConformer unavailable (%s); Hindi falls back to Whisper", e)
+        return None
+
+
+def build_stt(s, whisper: WhisperSTT, indic) -> stt.STT:
+    """Per-session STT; the router holds the session's sticky language."""
+    if len(s.languages) < 2:
+        return whisper
+    engines = {lang: whisper for lang in s.languages}
+    if indic is not None:
+        engines["hi"] = indic
+    router = LanguageRouter(set(s.languages), s.stt_language or s.languages[0],
+                            switch_prob=s.lid_switch_prob, min_seconds=s.lid_min_seconds)
+    return RoutedSTT(detector=whisper.detect_language, engines=engines, router=router)
+
+
 def prewarm(proc: JobProcess) -> None:
     s = settings()
     proc.userdata["vad"] = silero.VAD.load(activation_threshold=s.vad_activation,
                                            min_silence_duration=s.vad_min_silence)
-    proc.userdata["stt"] = WhisperSTT(model=s.stt_model, device=s.stt_device,
-                                      compute_type=s.stt_compute_type, language=s.stt_language)
+    proc.userdata["whisper"] = WhisperSTT(model=s.stt_model, device=s.stt_device,
+                                          compute_type=s.stt_compute_type,
+                                          language=s.stt_language)
+    proc.userdata["indic"] = load_indic(s)
     proc.userdata["tts"] = KokoroTTS(model_path=s.tts_model_path, voices_path=s.tts_voices_path,
-                                     voice=s.tts_voice, speed=s.tts_speed)
+                                     voice=s.tts_voice, hindi_voice=s.tts_hindi_voice,
+                                     speed=s.tts_speed)
 
 
 async def entrypoint(ctx: JobContext) -> None:
@@ -72,9 +101,10 @@ async def entrypoint(ctx: JobContext) -> None:
     vad = ud["vad"]
     session = AgentSession(
         vad=vad,
-        stt=stt.StreamAdapter(stt=ud["stt"], vad=vad),
+        stt=stt.StreamAdapter(stt=build_stt(s, ud["whisper"], ud["indic"]), vad=vad),
         llm=build_llm(s),
         tts=ud["tts"],
+        tts_text_transforms=["filter_markdown", "filter_emoji", split_on_danda],
         turn_handling=turn_handling(s, build_turn_detector(s)),
     )
     usage = metrics.UsageCollector()

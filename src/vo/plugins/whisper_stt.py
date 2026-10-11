@@ -40,6 +40,11 @@ class WhisperSTT(stt.STT):
     def model(self) -> str:
         return "faster-whisper"
 
+    def detect_language(self, pcm: np.ndarray) -> tuple[str, float]:
+        """Language ID from Whisper's first 30 s window (one encoder pass, no decoding)."""
+        lang, prob, _ = self._model.detect_language(audio=pcm, language_detection_segments=1)
+        return lang, prob
+
     def _transcribe(self, pcm: np.ndarray, language: str | None) -> tuple[str, str, float]:
         segments, info = self._model.transcribe(
             pcm, language=language, beam_size=self._beam_size,
