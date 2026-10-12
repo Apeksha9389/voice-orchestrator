@@ -3,7 +3,7 @@
 ## Pipeline
 
 ```
-caller (WebRTC / SIP) ──► LiveKit room ──► Agent worker
+caller (WebRTC | PSTN ─► livekit-sip) ──► LiveKit room ──► Agent worker (profile: web | sip)
                                              │
    audio in ─► RNNoise (48 kHz) ─────► Silero VAD ─┬─► language ID ─► STT (Whisper en | IndicConformer hi)
                                                   │          │
@@ -12,6 +12,7 @@ caller (WebRTC / SIP) ──► LiveKit room ──► Agent worker
                                                   │   turn detector (multilingual EOU)
                                                   │          ▼
                                 pause / resume / cancel ◄── LLM (OpenRouter / OpenAI, streamed)
+                                                             │  tools: lookup_order · transfer_to_human · end_call
                                                              │
                                                   │          ▼
    audio out ◄──────────────────────────── Kokoro TTS (script-aware en/hi, sentence-chunked)
@@ -59,6 +60,20 @@ Barge-in works as pause first, decide on the transcript:
 
 Every backchannel, interruption and resume is written to a structured `turn_event` log. Details and
 tuning are in [TURN_TAKING.md](TURN_TAKING.md).
+
+## Telephony and tools
+
+Phone calls arrive through LiveKit's SIP bridge as ordinary room participants. The session is
+built once the caller is known:
+
+- **SIP profile.** SIP callers get a lower VAD threshold (0.35, measured on simulated G.711
+  speech), a longer barge-in minimum (0.5 s, for line echo) and a longer endpointing minimum.
+- **Tools.** The LLM can look up orders, transfer the caller with a SIP REFER, and end the call
+  with a hang-up that waits for the goodbye to finish playing.
+- **Silence policy.** A silent caller is asked once whether they are still there, then the agent
+  says goodbye and hangs up.
+
+Setup, the profile measurements and the tool contracts are in [TELEPHONY.md](TELEPHONY.md).
 
 ## Configuration
 

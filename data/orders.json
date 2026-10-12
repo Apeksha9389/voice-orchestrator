@@ -1,0 +1,6 @@
+{
+  "A1234": {"status": "shipped", "carrier": "Delhivery", "eta": "2026-10-14", "items": ["Wireless earbuds"]},
+  "A5678": {"status": "out for delivery", "eta": "today by 7 PM", "items": ["Pressure cooker 5L"]},
+  "B9012": {"status": "processing", "eta": "2026-10-17", "items": ["Running shoes", "Socks (3 pack)"]},
+  "C3456": {"status": "cancelled", "refund": "₹2,499 refunded to original payment method on 2026-10-09"}
+}

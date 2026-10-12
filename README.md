@@ -22,6 +22,15 @@ python -m vo.agent dev
 
 Join with the [Agents Playground](https://agents-playground.livekit.io) using `ws://localhost:7880`.
 
+Phone calls (SIP), see [TELEPHONY.md](docs/TELEPHONY.md):
+
+```bash
+docker compose -f docker-compose.sip.yml up -d
+lk sip inbound create telephony/inbound-trunk.json
+lk sip dispatch create telephony/dispatch-rule.json
+python -m vo.agent dev
+```
+
 ## Benchmarks
 
 ```bash
@@ -34,4 +43,5 @@ python scripts/bench_noise.py   # denoiser effect on SNR and VAD under synthetic
 - [Noise suppression](docs/NOISE.md)
 - [Turn-taking & interruptions](docs/TURN_TAKING.md)
 - [Hindi / Hinglish](docs/MULTILINGUAL.md)
+- [Phone calls & tools](docs/TELEPHONY.md)
 - [Roadmap](docs/ROADMAP.md)

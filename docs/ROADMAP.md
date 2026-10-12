@@ -26,9 +26,14 @@ Scheduled build runs pick the first unchecked milestone.
   extra) handles Hindi, falling back to Whisper `hi`. Kokoro TTS is script-aware, and
   `split_on_danda` sentence-chunks Hindi replies. The Hinglish reply prompt is in
   ([MULTILINGUAL.md](MULTILINGUAL.md)).
-- [ ] **Day 5 — Oct 12 · Telephony ingest & tools.** LiveKit SIP inbound trunk + dispatch rule
-  config; 8 kHz path (VAD at 8k, upsample for STT); function tools (end call, transfer, lookup);
-  graceful call teardown.
+- [x] **Day 5 — Oct 12 · Telephony ingest & tools.** SIP stack: `docker-compose.sip.yml`
+  (livekit-sip + Redis) plus inbound trunk and dispatch-rule JSON. `CallInfo` reads the SIP
+  attributes, and the session is built after the caller joins, so phone calls get a SIP profile:
+  VAD 0.35 (measured on a simulated G.711 channel), 0.5 s barge-in, 0.5 s endpointing. Tools:
+  `end_call` (hangs up after the goodbye plays), `transfer_to_human` (SIP REFER) and `lookup_order`
+  (spoken-ID normalisation). An `AwayHandler` silence policy asks once, then hangs up
+  ([TELEPHONY.md](TELEPHONY.md)). There is no separate 8 kHz path: the bridge decodes G.711 and
+  the agent consumes 48 kHz band-limited audio.
 - [ ] **Day 6 — Oct 13 · Latency & robustness.** Preemptive generation; sentence-level TTS
   streaming; LLM fallback chain (OpenRouter → OpenAI); OpenTelemetry traces per turn
   (VAD→EOU→STT→LLM TTFT→TTS TTFB); retry/backoff on providers.

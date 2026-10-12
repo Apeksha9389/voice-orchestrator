@@ -30,8 +30,8 @@ def last_interrupted_reply(ctx: llm.ChatContext) -> llm.ChatMessage | None:
 
 class VoiceAgent(Agent):
     def __init__(self, *, instructions: str, tracker: OverlapTracker, events: InterruptionLog,
-                 backchannel_max_words: int = 3) -> None:
-        super().__init__(instructions=instructions)
+                 backchannel_max_words: int = 3, tools: list[llm.Tool] | None = None) -> None:
+        super().__init__(instructions=instructions, tools=tools)
         self._tracker = tracker
         self._events = events
         self._bc_max_words = backchannel_max_words

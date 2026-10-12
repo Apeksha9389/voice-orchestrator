@@ -1,0 +1,6 @@
+{
+  "dispatch_rule": {
+    "name": "voice-orchestrator",
+    "rule": { "dispatchRuleIndividual": { "roomPrefix": "call-" } }
+  }
+}

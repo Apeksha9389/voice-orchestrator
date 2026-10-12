@@ -92,3 +92,23 @@ def score(probs: np.ndarray, reference: np.ndarray, threshold: float = 0.5) -> V
         false_positive_rate=float(pred[~ref].mean()) if (~ref).any() else 0.0,
         recall=float(pred[ref].mean()) if ref.any() else 0.0,
     )
+
+
+def mulaw_roundtrip(x: np.ndarray, mu: float = 255.0) -> np.ndarray:
+    """G.711 mu-law companding with 8-bit quantisation."""
+    y = np.sign(x) * np.log1p(mu * np.abs(x)) / np.log1p(mu)
+    y = np.round((y + 1) * 127.5) / 127.5 - 1
+    return np.sign(y) * np.expm1(np.abs(y) * np.log1p(mu)) / mu
+
+
+def simulate_telephony(pcm: np.ndarray, sr: int) -> np.ndarray:
+    """Approximate a PSTN leg: 300-3400 Hz band, 8 kHz sampling, G.711 mu-law, back to `sr`."""
+    spec = np.fft.rfft(pcm)
+    f = np.fft.rfftfreq(len(pcm), 1 / sr)
+    spec[(f < 300) | (f > 3400)] = 0
+    band = np.fft.irfft(spec, len(pcm))
+    n8 = int(len(band) * 8000 / sr)
+    pcm8 = np.interp(np.linspace(0, len(band), n8, endpoint=False), np.arange(len(band)), band)
+    pcm8 = mulaw_roundtrip(np.clip(pcm8, -1, 1))
+    up = np.interp(np.linspace(0, n8, len(pcm), endpoint=False), np.arange(n8), pcm8)
+    return up.astype(np.float32)

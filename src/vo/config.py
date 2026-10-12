@@ -40,11 +40,22 @@ class Settings(BaseSettings):
     false_interruption_timeout: float = 1.0  # silence (s) after a pause before resuming
     backchannel_max_words: int = 3
 
+    # telephony
+    agent_name: str = ""  # set for explicit dispatch (e.g. "vo-agent" in the SIP dispatch rule)
+    sip_vad_activation: float = 0.35  # narrowband G.711 speech scores lower in Silero
+    sip_interrupt_min_duration: float = 0.5  # PSTN echo/line noise: require a bit more speech
+    sip_endpointing_min_delay: float = 0.5  # PSTN adds jitter-buffer delay to pauses
+    user_away_timeout: float = 12.0  # silence (s) before asking "are you still there?"
+    transfer_number: str | None = None  # E.164, e.g. +9180xxxxxxxx; unset disables transfers
+    orders_path: str = "data/orders.json"
+
     system_prompt: str = (
         "You are a concise, friendly voice assistant. Reply in one or two short spoken "
         "sentences. No markdown, lists, or emojis. Reply in the language the user speaks: "
         "English in English; Hindi or Hinglish in Hindi written in Devanagari, keeping common "
-        "English words (order, payment, account) in Latin script. Write numbers as digits."
+        "English words (order, payment, account) in Latin script. Write numbers as digits. "
+        "You can look up orders, transfer to a human, and end the call. Before ending the call, "
+        "say a short goodbye; before transferring, tell the caller you are connecting them."
     )
 
 

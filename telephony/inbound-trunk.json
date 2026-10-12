@@ -1,0 +1,7 @@
+{
+  "trunk": {
+    "name": "voice-orchestrator inbound",
+    "numbers": ["+910000000000"],
+    "krispEnabled": false
+  }
+}
