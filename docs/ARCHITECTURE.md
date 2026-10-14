@@ -11,11 +11,11 @@ caller (WebRTC | PSTN ─► livekit-sip) ──► LiveKit room ──► Agent
                                                   │          │
                                                   │   turn detector (multilingual EOU)
                                                   │          ▼
-                                pause / resume / cancel ◄── LLM (OpenRouter / OpenAI, streamed)
+                                pause / resume / cancel ◄── LLM: FallbackAdapter[OpenRouter → OpenAI], preemptive
                                                              │  tools: lookup_order · transfer_to_human · end_call
                                                              │
                                                   │          ▼
-   audio out ◄──────────────────────────── Kokoro TTS (script-aware en/hi, sentence-chunked)
+   audio out ◄──────────────────────────── Kokoro TTS (script-aware en/hi, sentence + clause chunked)
 ```
 
 ## Why a cascade on LiveKit Agents
@@ -60,6 +60,26 @@ Barge-in works as pause first, decide on the transcript:
 
 Every backchannel, interruption and resume is written to a structured `turn_event` log. Details and
 tuning are in [TURN_TAKING.md](TURN_TAKING.md).
+
+## Latency and robustness
+
+Each latency stage is attacked separately:
+
+- **End-of-turn wait.** The end-of-utterance model keeps the minimum silence wait at 0.4 s.
+- **LLM first token.** Preemptive generation overlaps the LLM's time to first token with the
+  end-of-turn decision.
+- **TTS first audio.** Kokoro synthesizes each sentence clause by clause, so first audio waits only
+  for the first clause. Measured: 3.6 s → 1.5 s on a long sentence, on 2 vCPUs.
+- **Cold start.** Whisper and Kokoro are warmed in `prewarm`, which removes about 1.3 s from the
+  first turn.
+
+**Failover.** The LLM sits behind `FallbackAdapter`: OpenRouter first, OpenAI if it produces no
+first token within 4 s. Local models fail fast instead of retrying.
+
+**Observability.** `LatencyTracker` logs per-turn response latency and its parts, plus p50/p95 at
+call end. LiveKit's OpenTelemetry spans export over OTLP when `VO_OTEL_ENDPOINT` is set.
+
+Details are in [LATENCY.md](LATENCY.md).
 
 ## Telephony and tools
 

@@ -5,7 +5,7 @@ import numpy as np
 from kokoro_onnx import Kokoro
 from livekit.agents import DEFAULT_API_CONNECT_OPTIONS, APIConnectOptions, tts
 
-from vo.lang.script import script_runs
+from vo.lang.script import clauses, script_runs
 
 SAMPLE_RATE = 24000
 ESPEAK_LANG = {"en": "en-us", "hi": "hi"}
@@ -38,12 +38,19 @@ class KokoroTTS(tts.TTS):
         return voice, [(ESPEAK_LANG[lang], chunk) for lang, chunk in runs]
 
     async def pcm(self, text: str) -> AsyncIterator[np.ndarray]:
+        # Kokoro synthesizes a whole phoneme batch before returning any audio, so time to first
+        # audio scales with chunk length; synthesizing clause by clause bounds it by the first clause
         voice, runs = self.plan(text)
-        for lang, chunk in runs:
-            async for samples, _ in self._engine.create_stream(
-                chunk, voice=voice, speed=self._speed, lang=lang
-            ):
-                yield (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16)
+        for lang, run in runs:
+            for piece in clauses(run):
+                async for samples, _ in self._engine.create_stream(
+                    piece, voice=voice, speed=self._speed, lang=lang
+                ):
+                    yield (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16)
+
+    def warmup(self) -> None:
+        """First ONNX inference pays graph/allocator setup (~1 s); do it before the first call."""
+        self._engine.create("Hello.", voice=self._voice, lang="en-us")
 
     def synthesize(self, text: str, *,
                    conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS) -> "_Stream":

@@ -34,9 +34,12 @@ Scheduled build runs pick the first unchecked milestone.
   (spoken-ID normalisation). An `AwayHandler` silence policy asks once, then hangs up
   ([TELEPHONY.md](TELEPHONY.md)). There is no separate 8 kHz path: the bridge decodes G.711 and
   the agent consumes 48 kHz band-limited audio.
-- [ ] **Day 6 — Oct 13 · Latency & robustness.** Preemptive generation; sentence-level TTS
-  streaming; LLM fallback chain (OpenRouter → OpenAI); OpenTelemetry traces per turn
-  (VAD→EOU→STT→LLM TTFT→TTS TTFB); retry/backoff on providers.
+- [x] **Day 6 — Oct 13 · Latency & robustness.** Preemptive generation; sentence plus clause
+  chunked Kokoro synthesis (first audio 3.6 s → 1.5 s on a long sentence); Whisper and Kokoro
+  warmup in `prewarm`; `FallbackAdapter` across OpenRouter and OpenAI with a 4 s TTFT budget;
+  fail-fast retries for local models. `LatencyTracker` logs per-turn response latency
+  (EOU + LLM TTFT + TTS TTFB) with p50/p95, and LiveKit's OpenTelemetry spans export over OTLP
+  ([LATENCY.md](LATENCY.md)).
 - [ ] **Day 7 — Oct 14 · Evaluation harness & docs.** Offline eval: scripted conversations mixed
   with MUSAN-style noise at 0/5/10 dB SNR (RNNoise vs. offline DeepFilterNet3 reference); metrics WER, turn latency p50/p95, interruption
   precision/recall; CI (ruff + pytest); final architecture and benchmark docs.

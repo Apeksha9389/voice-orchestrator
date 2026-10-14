@@ -6,8 +6,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="VO_", extra="ignore")
 
-    llm_provider: str = "openrouter"
+    llm_provider: str = "openrouter"  # primary: openrouter | openai
     llm_model: str = "openai/gpt-4o-mini"
+    llm_fallback_model: str = "gpt-4o-mini"  # used on the other provider when its key is set
+    llm_attempt_timeout: float = 4.0  # per-provider TTFT budget before failing over
+    llm_temperature: float = 0.4
     openrouter_api_key: str | None = None
     openai_api_key: str | None = None
 
@@ -39,6 +42,10 @@ class Settings(BaseSettings):
     interrupt_min_duration: float = 0.4  # user speech (s) before agent audio is paused
     false_interruption_timeout: float = 1.0  # silence (s) after a pause before resuming
     backchannel_max_words: int = 3
+
+    # latency / observability
+    preemptive_generation: bool = True  # start the LLM on the final transcript, before EOU
+    otel_endpoint: str | None = None  # OTLP/HTTP base URL, e.g. http://localhost:4318
 
     # telephony
     agent_name: str = ""  # set for explicit dispatch (e.g. "vo-agent" in the SIP dispatch rule)

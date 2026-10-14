@@ -44,4 +44,5 @@ python scripts/bench_noise.py   # denoiser effect on SNR and VAD under synthetic
 - [Turn-taking & interruptions](docs/TURN_TAKING.md)
 - [Hindi / Hinglish](docs/MULTILINGUAL.md)
 - [Phone calls & tools](docs/TELEPHONY.md)
+- [Latency & robustness](docs/LATENCY.md)
 - [Roadmap](docs/ROADMAP.md)

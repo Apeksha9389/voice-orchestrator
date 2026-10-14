@@ -40,6 +40,10 @@ class WhisperSTT(stt.STT):
     def model(self) -> str:
         return "faster-whisper"
 
+    def warmup(self) -> None:
+        """Run one decode so the first caller doesn't pay CTranslate2's lazy init."""
+        self._transcribe(np.zeros(TARGET_SR, np.float32), self._language or "en")
+
     def detect_language(self, pcm: np.ndarray) -> tuple[str, float]:
         """Language ID from Whisper's first 30 s window (one encoder pass, no decoding)."""
         lang, prob, _ = self._model.detect_language(audio=pcm, language_detection_segments=1)

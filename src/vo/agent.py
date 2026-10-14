@@ -7,15 +7,19 @@ from livekit.agents import (
     JobProcess,
     WorkerOptions,
     cli,
+    llm,
     metrics,
     stt,
 )
+from livekit.agents.types import APIConnectOptions
 from livekit.agents.voice import room_io
+from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import openai, silero
 
 from vo.audio.denoise import DenoisedAudioInput, build_denoiser
 from vo.config import settings
 from vo.lang.router import LanguageRouter, RoutedSTT
+from vo.observability import LatencyTracker, setup_tracing
 from vo.plugins.kokoro_tts import KokoroTTS, split_on_danda
 from vo.plugins.whisper_stt import WhisperSTT
 from vo.telephony.call import CallInfo, LiveKitCallControl
@@ -26,11 +30,35 @@ from vo.turns.tracking import InterruptionLog, OverlapTracker
 log = logging.getLogger("vo")
 
 
-def build_llm(s):
+def build_llm(s) -> llm.LLM:
+    """Primary provider first; the other provider (if its key is set) as failover. FallbackAdapter
+    marks a provider unavailable after `attempt_timeout` without a first token and probes it back."""
+
+    def openrouter(model):
+        return openai.LLM.with_openrouter(model=model, api_key=s.openrouter_api_key,
+                                          app_name="voice-orchestrator",
+                                          temperature=s.llm_temperature)
+
+    def openai_(model):
+        return openai.LLM(model=model, api_key=s.openai_api_key, temperature=s.llm_temperature)
+
+    chain = []
     if s.llm_provider == "openrouter":
-        return openai.LLM.with_openrouter(model=s.llm_model, api_key=s.openrouter_api_key,
-                                          app_name="voice-orchestrator")
-    return openai.LLM(model=s.llm_model, api_key=s.openai_api_key)
+        if s.openrouter_api_key:
+            chain.append(openrouter(s.llm_model))
+        if s.openai_api_key:
+            chain.append(openai_(s.llm_fallback_model))
+    else:
+        if s.openai_api_key:
+            chain.append(openai_(s.llm_model))
+        if s.openrouter_api_key:
+            chain.append(openrouter(s.llm_fallback_model))
+    if not chain:
+        raise RuntimeError("set VO_OPENROUTER_API_KEY or VO_OPENAI_API_KEY")
+    if len(chain) == 1:
+        return chain[0]
+    return llm.FallbackAdapter(chain, attempt_timeout=s.llm_attempt_timeout, max_retry_per_llm=1,
+                               retry_interval=0.3)
 
 
 def build_turn_detector(s):
@@ -59,6 +87,8 @@ def turn_handling(s, turn_detection, *, sip: bool = False) -> dict:
             "resume_false_interruption": True,
             "false_interruption_timeout": s.false_interruption_timeout,
         },
+        # the EOU model's wait overlaps LLM time-to-first-token; a changed transcript discards it
+        "preemptive_generation": {"enabled": s.preemptive_generation, "preemptive_tts": False},
     }
 
 
@@ -100,6 +130,11 @@ def prewarm(proc: JobProcess) -> None:
     proc.userdata["tts"] = KokoroTTS(model_path=s.tts_model_path, voices_path=s.tts_voices_path,
                                      voice=s.tts_voice, hindi_voice=s.tts_hindi_voice,
                                      speed=s.tts_speed)
+    # first inference of each model is ~1 s slower; pay it here, not on the caller's first turn
+    proc.userdata["whisper"].warmup()
+    proc.userdata["tts"].warmup()
+    if s.otel_endpoint:
+        proc.userdata["tracer"] = setup_tracing(s.otel_endpoint)
 
 
 async def entrypoint(ctx: JobContext) -> None:
@@ -119,8 +154,14 @@ async def entrypoint(ctx: JobContext) -> None:
         tts_text_transforms=["filter_markdown", "filter_emoji", split_on_danda],
         turn_handling=turn_handling(s, build_turn_detector(s), sip=call.is_sip),
         user_away_timeout=s.user_away_timeout,
+        # local STT/TTS fail fast instead of retrying; the LLM retries inside FallbackAdapter
+        conn_options=SessionConnectOptions(
+            stt_conn_options=APIConnectOptions(max_retry=0, timeout=10.0),
+            tts_conn_options=APIConnectOptions(max_retry=0, timeout=10.0),
+            llm_conn_options=APIConnectOptions(max_retry=1, retry_interval=0.5, timeout=10.0),
+        ),
     )
-    usage = metrics.UsageCollector()
+    usage, latency = metrics.UsageCollector(), LatencyTracker()
     tracker, events, away = OverlapTracker(), InterruptionLog(), AwayHandler()
     background: set[asyncio.Task] = set()
     session.on("agent_state_changed", lambda ev: tracker.on_agent_state(ev.new_state))
@@ -145,10 +186,13 @@ async def entrypoint(ctx: JobContext) -> None:
     def _on_metrics(ev):
         metrics.log_metrics(ev.metrics)
         usage.collect(ev.metrics)
+        latency.collect(ev.metrics)
 
     async def _report() -> None:
-        log.info("call end identity=%s usage=%s turn_events=%s", call.identity,
-                 usage.get_summary(), events.counts())
+        log.info("call end identity=%s usage=%s turn_events=%s latency=%s", call.identity,
+                 usage.get_summary(), events.counts(), latency.summary())
+        if tracer := ud.get("tracer"):
+            tracer.force_flush()
 
     ctx.add_shutdown_callback(_report)
     tools = make_call_tools(control, OrderStore.load(s.orders_path), s.transfer_number)
